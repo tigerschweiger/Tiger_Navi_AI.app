@@ -3,6 +3,7 @@ import express from "express";
 import cors from "cors";
 import authRouter from "./routes/auth";
 import navigateRouter from "./routes/navigate";
+import businessesRouter from "./routes/businesses";
 import { errorHandler } from "./middleware/errorHandler";
 
 const app = express();
@@ -13,6 +14,7 @@ app.use(express.json());
 app.get("/api/health", (_req, res) => res.json({ status: "ok" }));
 app.use("/api/auth", authRouter);
 app.use("/api/navigate", navigateRouter);
+app.use("/api/businesses", businessesRouter);
 
 app.use(errorHandler);
 

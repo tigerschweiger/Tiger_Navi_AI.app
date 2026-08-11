@@ -8,9 +8,55 @@ datasource db {
 }
 
 model User {
-  id           String   @id @default(uuid())
-  email        String   @unique
+  id           String     @id @default(uuid())
+  email        String     @unique
   passwordHash String
   name         String
-  createdAt    DateTime @default(now())
+  createdAt    DateTime   @default(now())
+  businesses   Business[]
+  reviews      Review[]
+}
+
+enum BusinessCategory {
+  RESTAURANT
+  CAFE
+  GROCERY
+  GAS_STATION
+  RETAIL
+  HEALTHCARE
+  ENTERTAINMENT
+  LODGING
+  OTHER
+}
+
+model Business {
+  id          String           @id @default(uuid())
+  ownerId     String
+  owner       User             @relation(fields: [ownerId], references: [id])
+  name        String
+  category    BusinessCategory
+  description String
+  address     String
+  lat         Float
+  lon         Float
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  reviews     Review[]
+
+  @@index([category])
+  @@index([lat, lon])
+}
+
+model Review {
+  id         String   @id @default(uuid())
+  businessId String
+  business   Business @relation(fields: [businessId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User     @relation(fields: [userId], references: [id])
+  rating     Int
+  comment    String
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@unique([businessId, userId])
 }

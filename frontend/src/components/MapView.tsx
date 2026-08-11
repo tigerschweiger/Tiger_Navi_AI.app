@@ -1,21 +1,8 @@
 import { MapContainer, Marker, Polyline, TileLayer, useMap } from "react-leaflet";
 import { useEffect } from "react";
 import L from "leaflet";
-import "leaflet/dist/leaflet.css";
 import { NavigateResponse } from "../api/client";
-
-// Vite doesn't resolve Leaflet's default marker asset paths automatically; wire them up explicitly.
-import markerIcon2x from "leaflet/dist/images/marker-icon-2x.png";
-import markerIcon from "leaflet/dist/images/marker-icon.png";
-import markerShadow from "leaflet/dist/images/marker-shadow.png";
-
-L.Icon.Default.mergeOptions({
-  iconRetinaUrl: markerIcon2x,
-  iconUrl: markerIcon,
-  shadowUrl: markerShadow,
-});
-
-const DEFAULT_CENTER: [number, number] = [39.9042, 116.4074]; // Beijing, used before any route exists
+import { DEFAULT_CENTER, OSM_ATTRIBUTION, OSM_TILE_URL } from "./leafletSetup";
 
 function FitToRoute({ result }: { result: NavigateResponse }) {
   const map = useMap();
@@ -35,10 +22,7 @@ export function MapView({ result }: { result: NavigateResponse | null }) {
 
   return (
     <MapContainer center={DEFAULT_CENTER} zoom={12} className="map-view">
-      <TileLayer
-        attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-        url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-      />
+      <TileLayer attribution={OSM_ATTRIBUTION} url={OSM_TILE_URL} />
       {result && (
         <>
           <Marker position={[result.origin.lat, result.origin.lon]} />

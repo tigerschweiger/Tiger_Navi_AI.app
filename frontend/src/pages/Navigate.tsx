@@ -2,7 +2,6 @@ import axios from "axios";
 import { FormEvent, useState } from "react";
 import { navigate as fetchRoute, NavigateResponse, Point } from "../api/client";
 import { MapView } from "../components/MapView";
-import { useAuth } from "../context/AuthContext";
 
 function formatDistance(meters: number): string {
   return meters >= 1000 ? `${(meters / 1000).toFixed(1)} km` : `${Math.round(meters)} m`;
@@ -16,7 +15,6 @@ function formatDuration(seconds: number): string {
 }
 
 export function Navigate() {
-  const { user, logout } = useAuth();
   const [origin, setOrigin] = useState("");
   const [destination, setDestination] = useState("");
   const [result, setResult] = useState<NavigateResponse | null>(null);
@@ -63,14 +61,6 @@ export function Navigate() {
 
   return (
     <div className="navigate-page">
-      <header className="navigate-header">
-        <h1>Navi</h1>
-        <div>
-          <span>{user?.name}</span>
-          <button onClick={logout}>退出登录</button>
-        </div>
-      </header>
-
       <form onSubmit={handleSubmit} className="navigate-form">
         <label>
           起点
