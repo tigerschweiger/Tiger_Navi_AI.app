@@ -4,6 +4,7 @@
 
 - **导航**：输入起点和终点，在地图上看到路线、距离和预计用时（类似 TomTom）
 - **商家与点评**：在地图上添加商家（名称、分类、简介、地址），搜索/浏览地图上的商家，给商家写星级评分 + 文字评论
+- **AI 点评总结**：商家详情页可以用 Claude 把一堆评论一键总结成简明的优缺点
 
 ## 技术栈
 
@@ -13,6 +14,7 @@
 - 地图服务：OpenStreetMap 生态
   - [Nominatim](https://nominatim.org/)：地址 -> 经纬度（地理编码）
   - [OSRM](http://project-osrm.org/)：经纬度 -> 路线规划
+- AI：[Anthropic API](https://console.anthropic.com/)（`@anthropic-ai/sdk`，`claude-opus-5`）用于商家点评总结
 
 当前使用的是这两个服务的**公共免费服务器**，无需注册、无需 API key，但有使用政策限制（约 1 请求/秒，禁止重负载/生产级滥用）。后端已经做了请求节流来遵守这个限制，十几人规模完全没问题。用户量变大之后必须迁移，见下方"未来扩展"。
 
@@ -36,7 +38,7 @@ docker run -d --name navi_postgres \
 
 ```bash
 cd backend
-cp .env.example .env   # 按需修改 JWT_SECRET 等
+cp .env.example .env   # 按需修改 JWT_SECRET，填入 ANTHROPIC_API_KEY 才能用 AI 总结功能
 npm install
 npx prisma migrate dev
 npm run dev             # http://localhost:4000
@@ -79,6 +81,7 @@ npm run dev              # http://localhost:5173，/api 请求会自动代理到
 | DELETE | /api/businesses/:id | 删除商家（需要 Bearer token，仅创建者本人） |
 | POST | /api/businesses/:id/reviews | 新增/更新自己对该商家的评论：`{rating, comment}`（需要 Bearer token，一人一店一条，重复提交即更新） |
 | DELETE | /api/businesses/:id/reviews/:reviewId | 删除自己的评论（需要 Bearer token，仅本人） |
+| GET | /api/businesses/:id/summary | 用 Claude 总结该商家的评论优缺点：`{summary: string \| null}`，没有评论时 `summary` 为 `null`（需要 Bearer token，需配置 `ANTHROPIC_API_KEY`） |
 
 商家分类（`category`）目前是固定枚举：`RESTAURANT` 餐厅、`CAFE` 咖啡厅、`GROCERY` 超市、`GAS_STATION` 加油站、`RETAIL` 零售、`HEALTHCARE` 医疗、`ENTERTAINMENT` 娱乐、`LODGING` 住宿、`OTHER` 其他。
 
@@ -102,3 +105,4 @@ npm run dev              # http://localhost:5173，/api 请求会自动代理到
 - 未持久化历史导航记录。
 - 商家没有审核流程，任何登录用户创建后立即公开可见；也没有图片上传，只有文字简介。
 - 商家搜索按当前地图可视范围查询，还没有"附近排序"（按距离由近到远）能力。
+- AI 总结每次点击都会实时调用 Claude API，没有缓存；评论多的商家可以之后加缓存/异步预生成。自然语言搜索、AI 行程规划等其他 AI 功能尚未实现。

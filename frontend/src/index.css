@@ -307,6 +307,33 @@ body {
   margin-bottom: 0.75rem;
 }
 
+.ai-summary {
+  background: #eff6ff;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.ai-summary p {
+  margin: 0;
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.ai-summary button {
+  padding: 0.5rem 1rem;
+  border: none;
+  border-radius: 6px;
+  background: #2563eb;
+  color: white;
+  cursor: pointer;
+}
+
+.ai-summary button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
 .review-form {
   display: flex;
   flex-direction: column;

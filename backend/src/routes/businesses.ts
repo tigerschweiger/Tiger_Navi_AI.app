@@ -5,6 +5,7 @@ import { prisma } from "../db";
 import { authMiddleware, AuthedRequest } from "../middleware/auth";
 import { HttpError } from "../middleware/errorHandler";
 import { geocode } from "../services/geocode";
+import { summarizeReviews } from "../services/ai";
 
 const router = Router();
 
@@ -110,6 +111,28 @@ router.get("/:id", async (req, res, next) => {
     res.json({
       business: { ...rest, ...summarize({ reviews }), reviews },
     });
+  } catch (err) {
+    next(err);
+  }
+});
+
+router.get("/:id/summary", authMiddleware, async (req, res, next) => {
+  try {
+    const business = await prisma.business.findUnique({
+      where: { id: req.params.id },
+      include: { reviews: { select: { rating: true, comment: true } } },
+    });
+
+    if (!business) {
+      throw new HttpError(404, "Business not found");
+    }
+
+    if (business.reviews.length === 0) {
+      return res.json({ summary: null });
+    }
+
+    const summary = await summarizeReviews(business.name, business.reviews);
+    res.json({ summary });
   } catch (err) {
     next(err);
   }

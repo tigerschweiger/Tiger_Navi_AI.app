@@ -105,3 +105,8 @@ export async function upsertReview(
 export async function deleteReview(businessId: string, reviewId: string): Promise<void> {
   await apiClient.delete(`/businesses/${businessId}/reviews/${reviewId}`);
 }
+
+export async function getBusinessSummary(businessId: string): Promise<string | null> {
+  const { data } = await apiClient.get<{ summary: string | null }>(`/businesses/${businessId}/summary`);
+  return data.summary;
+}

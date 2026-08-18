@@ -9,6 +9,7 @@ import {
   deleteBusiness,
   deleteReview,
   getBusiness,
+  getBusinessSummary,
   upsertReview,
 } from "../api/places";
 
@@ -22,6 +23,9 @@ export function BusinessDetail() {
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [summary, setSummary] = useState<string | null>(null);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [summaryError, setSummaryError] = useState<string | null>(null);
 
   async function load() {
     if (!id) return;
@@ -40,9 +44,25 @@ export function BusinessDetail() {
   }
 
   useEffect(() => {
+    setSummary(null);
+    setSummaryError(null);
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
+
+  async function handleSummarize() {
+    if (!id) return;
+    setSummaryLoading(true);
+    setSummaryError(null);
+    try {
+      const result = await getBusinessSummary(id);
+      setSummary(result);
+    } catch {
+      setSummaryError("生成总结失败，请重试");
+    } finally {
+      setSummaryLoading(false);
+    }
+  }
 
   async function handleReviewSubmit(e: FormEvent) {
     e.preventDefault();
@@ -112,6 +132,19 @@ export function BusinessDetail() {
 
       <section className="reviews-section">
         <h3>评论</h3>
+
+        {business.reviewCount > 0 && (
+          <div className="ai-summary">
+            {summary !== null ? (
+              <p>{summary}</p>
+            ) : (
+              <button onClick={handleSummarize} disabled={summaryLoading}>
+                {summaryLoading ? "AI 总结中..." : "AI 总结点评"}
+              </button>
+            )}
+            {summaryError && <p className="error">{summaryError}</p>}
+          </div>
+        )}
 
         <form onSubmit={handleReviewSubmit} className="review-form">
           <Stars value={rating} onChange={setRating} />
