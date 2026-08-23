@@ -63,6 +63,7 @@ SMOKE=1 ./run.sh mixed.js
 # 也可以单独只跑其中一个场景
 ./run.sh search.js
 ./run.sh detail.js
+./run.sh review.js    # 写流量：POST 评论，占比按真实场景是小头（mixed.js 里权重约是 search 的 10%）
 
 # 指定压测目标地址（比如打线上/预发环境而不是本地）
 BASE_URL=https://your-staging-api.example.com ./run.sh mixed.js
@@ -88,6 +89,32 @@ npm run clean
 
 按 `u_%` / `b_%` / `r_%` 前缀删除，不会碰真实用户/商家数据。
 
+## 跑压测前，先把后端配置成能扛住并发的样子
+
+默认的 `npm run dev`（`tsx watch`，单进程，Prisma 默认连接池公式 `CPU核数*2+1`）在几千并发下会先在应用层堵死，而不是数据库先撑不住——症状是 P50/P95/P99 挤在一起、失败率升高，看起来像是数据库瓶颈，其实流量根本没到数据库那层。压测前用生产模式起后端，并显式配置：
+
+```bash
+cd backend
+npm run build
+CLUSTER_WORKERS=8 DB_POOL_SIZE=10 npm start
+```
+
+- `CLUSTER_WORKERS`：用 Node 的 `cluster` 模块 fork 多个worker 进程，让应用层用满多核 CPU（不是只用一个核）
+- `DB_POOL_SIZE`：每个进程自己的 Prisma 连接池大小；`CLUSTER_WORKERS * DB_POOL_SIZE` 要控制在 Postgres `max_connections`（默认 100）以内，留出余量
+- `tsx watch` 开发模式和 `cluster` 配合不好，压测请一定用 `npm run build && npm start`，不要用 `npm run dev`
+
+## k6 从另一台机器打过来（避免压测工具和被测系统抢同一份 CPU）
+
+本地单机跑 k6 会让 k6 自己（模拟几千 VU 很吃 CPU）和被测的 Node/Postgres 抢核，测出来的数字不干净。有第二台机器的话：
+
+1. 后端所在的机器：确认 `backend` 监听的端口（默认 4000）没被防火墙挡住，能被局域网内其他设备访问到（Express 默认监听所有网卡，不用改代码）
+2. 查这台机器的局域网 IP（Linux/Mac: `ip addr` 或 `ifconfig`；Windows: `ipconfig`）
+3. 在另一台笔记本上装 k6（`brew install k6` / `choco install k6`，或者一样用 `docker run grafana/k6`，这台机器上不需要 `--network host`，因为是打远程 IP，默认 bridge 网络就能出去）
+4. 从笔记本上跑：`BASE_URL=http://<后端机器局域网IP>:4000 k6 run k6/mixed.js`（如果没装 k6，用 `docker run --rm -i -e BASE_URL=http://<IP>:4000 -v "$(pwd)/k6:/scripts" -w /scripts grafana/k6 run mixed.js`）
+5. `k6/data/` 里的 token/城市/商家样本文件是纯数据，跟着 `k6/` 目录一起复制到笔记本上即可，不需要笔记本能访问数据库
+
+这样后端机器只承受真实的 HTTP 流量，k6 的开销留在另一台设备上，测出来的延迟才是"服务端的瓶颈"而不是"两个进程抢一台机器的核"。
+
 ## 目录说明
 
 ```
@@ -102,7 +129,8 @@ load-test/
     lib/data.js                # k6 侧的 SharedArray 数据加载 + 加权选城市/生成 bbox 的工具函数
     search.js                   # 场景：GET /api/businesses（bbox 搜索）
     detail.js                    # 场景：GET /api/businesses/:id
-    mixed.js                      # search + detail 组合场景，是主要压测入口
+    review.js                     # 场景：POST /api/businesses/:id/reviews（写流量）
+    mixed.js                       # search + detail + review 组合场景，是主要压测入口
     data/                          # generate-tokens.ts 的输出（gitignore）
   run.sh                            # 用 Docker 跑 k6 的封装脚本
 ```
