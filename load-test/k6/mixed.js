@@ -81,5 +81,11 @@ export const options = {
     "http_req_duration{name:business_detail}": ["p(50)<300", "p(95)<800", "p(99)<1000"],
     "http_req_duration{name:post_review}": ["p(50)<300", "p(95)<800", "p(99)<1000"],
     http_req_failed: ["rate<0.01"],
+    // server_duration is the Server-Timing-derived, network-free counterpart
+    // to the http_req_duration lines above — compare the two in the summary
+    // to see how much of the total is network transit vs. actual app work.
+    "server_duration{name:search_businesses}": ["p(50)<300", "p(95)<800", "p(99)<1000"],
+    "server_duration{name:business_detail}": ["p(50)<300", "p(95)<800", "p(99)<1000"],
+    "server_duration{name:post_review}": ["p(50)<300", "p(95)<800", "p(99)<1000"],
   },
 };

@@ -78,3 +78,27 @@ export function randomBusiness() {
 export function randomFrom(arr) {
   return arr[Math.floor(Math.random() * arr.length)];
 }
+
+/**
+ * Reads the `Server-Timing: app;dur=<ms>` header the backend stamps on every
+ * response (see backend/src/index.ts) — a duration measured entirely inside
+ * the Node process, with no network transit time baked in. Recording this
+ * alongside k6's own http_req_duration (which *does* include the network
+ * hop) lets a run from a remote machine (e.g. the laptop over LAN) show both
+ * numbers side by side: the gap between them is network + OS-level overhead,
+ * not app work. No clock sync between machines needed, since only a
+ * duration crosses the wire, never a timestamp to compare against.
+ */
+export function parseServerTiming(res) {
+  const headers = res.headers || {};
+  let raw = null;
+  for (const key in headers) {
+    if (key.toLowerCase() === "server-timing") {
+      raw = headers[key];
+      break;
+    }
+  }
+  if (!raw) return null;
+  const match = raw.match(/dur=([\d.]+)/);
+  return match ? parseFloat(match[1]) : null;
+}

@@ -28,6 +28,25 @@ if (numWorkers > 1 && cluster_1.default.isPrimary) {
 }
 else {
     const app = (0, express_1.default)();
+    // Stamps every response with how long *this process* spent on it, via the
+    // standard Server-Timing header (`Server-Timing: app;dur=<ms>`). Measured
+    // with a monotonic clock entirely inside this Node process, so it never
+    // includes network transit time between client and server — that's the
+    // whole point: a client-side tool like k6 can only measure round-trip time
+    // (network + server both baked in); this is the piece that isn't network.
+    // Registered first so it wraps body parsing + routing + everything else.
+    app.use((_req, res, next) => {
+        const start = process.hrtime.bigint();
+        const originalEnd = res.end.bind(res);
+        res.end = ((...args) => {
+            if (!res.headersSent) {
+                const durationMs = Number(process.hrtime.bigint() - start) / 1e6;
+                res.setHeader("Server-Timing", `app;dur=${durationMs.toFixed(2)}`);
+            }
+            return originalEnd(...args);
+        });
+        next();
+    });
     app.use((0, cors_1.default)());
     app.use(express_1.default.json());
     app.get("/api/health", (_req, res) => res.json({ status: "ok", pid: process.pid }));

@@ -1,6 +1,20 @@
 import http from "k6/http";
 import { check } from "k6";
-import { weightedCity, bboxAround, randomToken, CATEGORIES, KEYWORDS, randomFrom } from "./lib/data.js";
+import { Trend } from "k6/metrics";
+import {
+  weightedCity,
+  bboxAround,
+  randomToken,
+  CATEGORIES,
+  KEYWORDS,
+  randomFrom,
+  parseServerTiming,
+} from "./lib/data.js";
+
+// Pure server-side processing time (see lib/data.js) reported alongside k6's
+// own http_req_duration — compare the two in the summary to see how much of
+// the total is network transit vs. actual app work.
+const serverDuration = new Trend("server_duration", true);
 
 const BASE_URL = __ENV.BASE_URL || "http://localhost:4000";
 
@@ -37,6 +51,10 @@ export const options = {
     // Encodes the <1s query-latency target directly as pass/fail.
     http_req_duration: ["p(50)<300", "p(95)<800", "p(99)<1000"],
     http_req_failed: ["rate<0.01"],
+    // Same budget, but measured server-side only (no network transit) — see
+    // lib/data.js. Useful to compare against http_req_duration when k6 runs
+    // on a different machine than the backend.
+    server_duration: ["p(50)<300", "p(95)<800", "p(99)<1000"],
   },
 };
 
@@ -63,6 +81,9 @@ export function search() {
     headers: { Authorization: `Bearer ${randomToken()}` },
     tags: { name: "search_businesses" },
   });
+
+  const serverMs = parseServerTiming(res);
+  if (serverMs !== null) serverDuration.add(serverMs, { name: "search_businesses" });
 
   check(res, {
     "status is 200": (r) => r.status === 200,

@@ -1,6 +1,9 @@
 import http from "k6/http";
 import { check } from "k6";
-import { randomToken, randomBusiness } from "./lib/data.js";
+import { Trend } from "k6/metrics";
+import { randomToken, randomBusiness, parseServerTiming } from "./lib/data.js";
+
+const serverDuration = new Trend("server_duration", true);
 
 const BASE_URL = __ENV.BASE_URL || "http://localhost:4000";
 
@@ -30,6 +33,7 @@ export const options = {
   thresholds: {
     http_req_duration: ["p(50)<300", "p(95)<800", "p(99)<1000"],
     http_req_failed: ["rate<0.01"],
+    server_duration: ["p(50)<300", "p(95)<800", "p(99)<1000"],
   },
 };
 
@@ -40,6 +44,9 @@ export function detail() {
     headers: { Authorization: `Bearer ${randomToken()}` },
     tags: { name: "business_detail" },
   });
+
+  const serverMs = parseServerTiming(res);
+  if (serverMs !== null) serverDuration.add(serverMs, { name: "business_detail" });
 
   check(res, {
     "status is 200": (r) => r.status === 200,
