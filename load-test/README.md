@@ -115,6 +115,28 @@ CLUSTER_WORKERS=8 DB_POOL_SIZE=10 npm start
 
 这样后端机器只承受真实的 HTTP 流量，k6 的开销留在另一台设备上，测出来的延迟才是"服务端的瓶颈"而不是"两个进程抢一台机器的核"。
 
+## 跨机器测的时候，怎么判断慢在哪一层
+
+每个响应都带一个 `Server-Timing: app;dur=<ms>` 头，纯粹在服务端进程内部用高精度计时器测量，**不包含任何网络传输时间**。`search.js`/`detail.js`/`review.js` 会解析这个头，记录成一个独立的 `server_duration` 指标，跟 k6 自带的 `http_req_duration`（客户端看到的总耗时，含网络）并排出现在同一份汇总报告里。
+
+跑完之后对比这两行：
+- `server_duration` 快、达标，`http_req_duration` 慢、超标 → 瓶颈在应用/数据库**之外**（网络、TCP 连接排队），不是代码或查询的问题
+- 两者都慢 → 瓶颈在应用/数据库本身，回到上面"配置 CLUSTER_WORKERS/DB_POOL_SIZE"那节
+
+如果是前一种情况（`server_duration` 干净但 `http_req_duration` 很差，尤其伴随大量 `connection reset by peer` / `request timeout`），大概率是 TCP 连接层撑不住短时间内几千个并发连接涌入，需要在**服务端和跑 k6 的机器上都**调大这几个系统级参数（这些改不了代码，得在各自机器的终端里跑，通常需要管理员权限）：
+
+```bash
+# Linux：服务端和跑 k6 的机器都执行
+# 加大 TCP 连接排队队列（对应后端的 LISTEN_BACKLOG，两边要匹配着调，光调一边没用）
+sudo sysctl -w net.core.somaxconn=65535
+sudo sysctl -w net.ipv4.tcp_max_syn_backlog=65535
+
+# 加大单进程能打开的文件描述符/连接数上限（默认常见是 1024，5000+ 并发连接肯定不够）
+ulimit -n 65536
+```
+
+后端这边同时把 `backend/.env` 里的 `LISTEN_BACKLOG` 调大到匹配 `somaxconn`（默认已经是 1024，可以按需调更大），跑 k6 的这台机器如果用 Docker 跑 k6，容器自己的 fd 限制也可能不够，跑的时候加上 `--ulimit nofile=65536:65536`。
+
 ## 目录说明
 
 ```

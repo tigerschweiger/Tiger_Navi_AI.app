@@ -55,7 +55,15 @@ if (numWorkers > 1 && cluster.isPrimary) {
   app.use(errorHandler);
 
   const port = Number(process.env.PORT) || 4000;
-  app.listen(port, () => {
-    console.log(`navi-app backend (pid ${process.pid}) listening on http://localhost:${port}`);
+  // Node's listen() backlog defaults to a conservative value, and is capped by
+  // the OS's own accept-queue limit (net.core.somaxconn on Linux) regardless
+  // of what's passed here — bump both. A burst of thousands of near-
+  // simultaneous connections (e.g. a k6 run ramping to 5000+ VUs) can exceed
+  // the default queue depth before the app ever sees the request, which
+  // shows up as client-side "connection reset" / timeout, not app latency —
+  // see LISTEN_BACKLOG in .env.example for the matching sysctl commands.
+  const backlog = Number(process.env.LISTEN_BACKLOG ?? 1024);
+  app.listen(port, "0.0.0.0", backlog, () => {
+    console.log(`navi-app backend (pid ${process.pid}) listening on http://0.0.0.0:${port} (backlog=${backlog})`);
   });
 }
