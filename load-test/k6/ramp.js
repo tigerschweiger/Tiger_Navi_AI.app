@@ -5,58 +5,50 @@ import exec from "k6/execution";
 import { weightedCity, bboxAround, randomToken, parseServerTiming } from "./lib/data.js";
 
 // Diagnostic script, not a load-shape test: search-only, held flat at each
-// concurrency level for 25s at a time, stepping 200 -> 500 -> 1000 -> 2000
-// -> 3500 -> 5400 VUs, so the summary shows exactly which step latency and
-// http_req_failed start blowing up at, instead of just "it's fine at 50 and
-// broken at 5400" with nothing in between.
+// concurrency level for 25s at a time, stepping through VU levels so the
+// summary shows exactly which step latency and http_req_failed start
+// blowing up at, instead of just "it's fine at 50 and broken at 5400" with
+// nothing in between.
+//
+// MAX_VU caps how high the ramp goes (default: no cap, runs the full list).
+// e.g. MAX_VU=3500 stops after the 3500 step instead of continuing to 5400 —
+// use this to test a specific target band without also triggering whatever
+// higher-level failure cliff sits above it.
 const serverDuration = new Trend("server_duration", true);
 
 const BASE_URL = __ENV.BASE_URL || "http://localhost:4000";
 
+const ALL_LEVELS = [200, 500, 1000, 2000, 3500, 5400];
+const SMOKE_LEVELS = [20, 50, 100];
+
+const maxVU = __ENV.MAX_VU ? Number(__ENV.MAX_VU) : Infinity;
+const levels = (__ENV.SMOKE ? SMOKE_LEVELS : ALL_LEVELS).filter((v) => v <= maxVU);
+
+if (levels.length === 0) {
+  throw new Error(
+    `MAX_VU=${__ENV.MAX_VU} is below the smallest level (${(__ENV.SMOKE ? SMOKE_LEVELS : ALL_LEVELS)[0]}) — nothing to run.`,
+  );
+}
+
+// Ramp duration to reach a step, hold duration once there, per level.
+const RAMP_SEC = 5;
+const HOLD_SEC = __ENV.SMOKE ? 10 : 25;
+const RAMPDOWN_SEC = __ENV.SMOKE ? 10 : 20;
+const PER_LEVEL_SEC = RAMP_SEC + HOLD_SEC;
+
 // { untilSec, target } — untilSec is cumulative elapsed time (ramp + hold)
-// at which this step ends. Keep in sync with `fullStages` below.
-const STEPS = [
-  { untilSec: 30, target: 200 },
-  { untilSec: 60, target: 500 },
-  { untilSec: 90, target: 1000 },
-  { untilSec: 120, target: 2000 },
-  { untilSec: 150, target: 3500 },
-  { untilSec: 180, target: 5400 },
-];
+// at which this step ends.
+const steps = levels.map((target, i) => ({
+  untilSec: (i + 1) * PER_LEVEL_SEC,
+  target,
+}));
 
-const fullStages = [
-  { duration: "5s", target: 200 },
-  { duration: "25s", target: 200 },
-  { duration: "5s", target: 500 },
-  { duration: "25s", target: 500 },
-  { duration: "5s", target: 1000 },
-  { duration: "25s", target: 1000 },
-  { duration: "5s", target: 2000 },
-  { duration: "25s", target: 2000 },
-  { duration: "5s", target: 3500 },
-  { duration: "25s", target: 3500 },
-  { duration: "5s", target: 5400 },
-  { duration: "25s", target: 5400 },
-  { duration: "20s", target: 0 },
-];
-
-const smokeSteps = [
-  { untilSec: 15, target: 20 },
-  { untilSec: 30, target: 50 },
-  { untilSec: 45, target: 100 },
-];
-
-const smokeStages = [
-  { duration: "5s", target: 20 },
-  { duration: "10s", target: 20 },
-  { duration: "5s", target: 50 },
-  { duration: "10s", target: 50 },
-  { duration: "5s", target: 100 },
-  { duration: "10s", target: 100 },
-  { duration: "10s", target: 0 },
-];
-
-const steps = __ENV.SMOKE ? smokeSteps : STEPS;
+const stages = [];
+for (const target of levels) {
+  stages.push({ duration: `${RAMP_SEC}s`, target });
+  stages.push({ duration: `${HOLD_SEC}s`, target });
+}
+stages.push({ duration: `${RAMPDOWN_SEC}s`, target: 0 });
 
 function stepLabel() {
   const elapsedSec = exec.instance.currentTestRunDuration / 1000;
@@ -82,7 +74,7 @@ export const options = {
     ramp: {
       executor: "ramping-vus",
       startVUs: 0,
-      stages: __ENV.SMOKE ? smokeStages : fullStages,
+      stages,
       exec: "ramp",
     },
   },
