@@ -24,6 +24,7 @@ docker run --rm -i \
   --ulimit nofile="${ULIMIT_NOFILE}:${ULIMIT_NOFILE}" \
   -e BASE_URL="$BASE_URL" \
   -e SMOKE="${SMOKE:-}" \
+  -e MAX_VU="${MAX_VU:-}" \
   -v "$K6_DIR":/scripts \
   -w /scripts \
   grafana/k6 run "$SCRIPT"
